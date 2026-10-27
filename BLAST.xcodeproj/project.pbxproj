@@ -7,13 +7,13 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		7935FFFE306E540800AAC9BD /* Blueprint Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Blueprint Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		7935FFFE306E540800AAC9BD /* BLAST.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BLAST.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		79350000306E540800AAC9BD /* Blueprint Converter */ = {
+		79350000306E540800AAC9BD /* BLAST */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Blueprint Converter";
+			path = BLAST;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -32,7 +32,7 @@
 		7935FFF5306E540800AAC9BD = {
 			isa = PBXGroup;
 			children = (
-				79350000306E540800AAC9BD /* Blueprint Converter */,
+				79350000306E540800AAC9BD /* BLAST */,
 				7935FFFF306E540800AAC9BD /* Products */,
 			);
 			sourceTree = "<group>";
@@ -40,7 +40,7 @@
 		7935FFFF306E540800AAC9BD /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				7935FFFE306E540800AAC9BD /* Blueprint Converter.app */,
+				7935FFFE306E540800AAC9BD /* BLAST.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,9 +48,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		7935FFFD306E540800AAC9BD /* Blueprint Converter */ = {
+		7935FFFD306E540800AAC9BD /* BLAST */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 79350009306E540900AAC9BD /* Build configuration list for PBXNativeTarget "Blueprint Converter" */;
+			buildConfigurationList = 79350009306E540900AAC9BD /* Build configuration list for PBXNativeTarget "BLAST" */;
 			buildPhases = (
 				7935FFFA306E540800AAC9BD /* Sources */,
 				7935FFFB306E540800AAC9BD /* Frameworks */,
@@ -61,13 +61,13 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				79350000306E540800AAC9BD /* Blueprint Converter */,
+				79350000306E540800AAC9BD /* BLAST */,
 			);
-			name = "Blueprint Converter";
+			name = BLAST;
 			packageProductDependencies = (
 			);
-			productName = "Blueprint Converter";
-			productReference = 7935FFFE306E540800AAC9BD /* Blueprint Converter.app */;
+			productName = BLAST;
+			productReference = 7935FFFE306E540800AAC9BD /* BLAST.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -85,7 +85,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 7935FFF9306E540800AAC9BD /* Build configuration list for PBXProject "Blueprint Converter" */;
+			buildConfigurationList = 7935FFF9306E540800AAC9BD /* Build configuration list for PBXProject "BLAST" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -99,7 +99,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				7935FFFD306E540800AAC9BD /* Blueprint Converter */,
+				7935FFFD306E540800AAC9BD /* BLAST */,
 			);
 		};
 /* End PBXProject section */
@@ -250,12 +250,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = C8GR948K5Q;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = C8GR948K5Q;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -265,8 +268,10 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.inetum.Blueprint-Converter";
+				PRODUCT_BUNDLE_IDENTIFIER = com.inetum.BLAST;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -282,12 +287,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = C8GR948K5Q;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = C8GR948K5Q;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -297,8 +305,10 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.inetum.Blueprint-Converter";
+				PRODUCT_BUNDLE_IDENTIFIER = com.inetum.BLAST;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -312,7 +322,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		79350009306E540900AAC9BD /* Build configuration list for PBXNativeTarget "Blueprint Converter" */ = {
+		79350009306E540900AAC9BD /* Build configuration list for PBXNativeTarget "BLAST" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				7935000A306E540900AAC9BD /* Debug */,
@@ -321,7 +331,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		7935FFF9306E540800AAC9BD /* Build configuration list for PBXProject "Blueprint Converter" */ = {
+		7935FFF9306E540800AAC9BD /* Build configuration list for PBXProject "BLAST" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				79350007306E540900AAC9BD /* Debug */,
