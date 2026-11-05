@@ -1,0 +1,19 @@
+name: "Reusable"
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  assign-tag:
+    name: "Assign tag"
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: Inetum-Poland/.github/.github/workflows/assign_tag.yml@main
+    with:
+      bump_fail_if_no_level: true
+      bump_latest: true
+      bump_semver: true
+    secrets: inherit

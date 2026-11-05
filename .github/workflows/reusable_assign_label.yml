@@ -1,0 +1,23 @@
+name: "Reusable"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    types:
+      - labeled
+      - unlabeled
+      - opened
+      - reopened
+      - synchronize
+
+jobs:
+  assign:
+    name: "Assign"
+    permissions:
+      pull-requests: write
+      contents: read
+    uses: Inetum-Poland/.github/.github/workflows/assign_label.yml@main

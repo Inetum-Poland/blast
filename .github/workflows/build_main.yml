@@ -1,0 +1,177 @@
+name: "Build main DMG"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: "Build artifact"
+    runs-on: macos-26
+
+    env:
+      XCODE_PATH: "/Applications/Xcode_26.5.app"
+      PROJECT_NAME: "BLAST"
+      SCHEME: "BLAST"
+      APP_NAME: "BLAST"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s "${{ env.XCODE_PATH }}/Contents/Developer"
+
+      - name: Install app signing certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          keychain-password: ${{ github.run_id }}
+          p12-file-base64: ${{ secrets.APP_CERTIFICATE_P12 }}
+          p12-password: ${{ secrets.APP_CERTIFICATE_P12_PASSWORD }}
+
+      - name: Build app
+        run: |
+          set -euo pipefail
+
+          xcodebuild \
+            -project "BLAST.xcodeproj" \
+            -scheme "BLAST" \
+            clean build analyze \
+            -configuration Release \
+            -derivedDataPath DerivedData
+
+      - name: Locate app
+        run: |
+          set -euo pipefail
+
+          APP_PATH="$(find "${GITHUB_WORKSPACE}/DerivedData/Build/Products/Release" -maxdepth 1 -name "*.app" | head -n 1)"
+
+          if [ -z "${APP_PATH}" ]; then
+            echo "No .app found in Release output"
+            exit 1
+          fi
+
+          echo "APP_PATH=${APP_PATH}" >> "$GITHUB_ENV"
+          echo "Found app: ${APP_PATH}"
+
+      - name: Verify app signature
+        run: |
+          set -euo pipefail
+
+          codesign --verify --deep --strict --verbose=2 "${{ env.APP_PATH }}"
+          codesign -dv --verbose=4 "${{ env.APP_PATH }}" || true
+
+      - name: Setup notarization
+        run: |
+          "${{ env.XCODE_PATH }}/Contents/Developer/usr/bin/notarytool" store-credentials \
+            --key /dev/stdin \
+            --key-id "${{ secrets.NOTARY_AUTH_KEY_ID }}" \
+            --issuer "${{ secrets.NOTARY_ISSUER_UUID }}" \
+            default <<< "${{ secrets.NOTARY_AUTH_KEY }}"
+
+      - name: Resolve Developer ID identity for DMG signing
+        env:
+          DEV_APPLICATION_CERT_CN: ${{ secrets.DEV_APPLICATION_CERT_CN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DEV_APPLICATION_CERT_CN}" ]; then
+            echo "Using repository secret DEV_APPLICATION_CERT_CN."
+            echo "CODESIGN_IDENTITY=${DEV_APPLICATION_CERT_CN}" >> "$GITHUB_ENV"
+          else
+            IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/ {print $2; exit}')"
+            if [ -z "${IDENTITY}" ]; then
+              echo "No Developer ID Application identity found. Set secret DEV_APPLICATION_CERT_CN or import a valid P12."
+              security find-identity -v -p codesigning || true
+              exit 1
+            fi
+            echo "Resolved identity from keychain: ${IDENTITY}"
+            echo "CODESIGN_IDENTITY=${IDENTITY}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Create DMG
+        run: |
+          set -euo pipefail
+
+          mkdir -p dmg-root
+          cp -R "${{ env.APP_PATH }}" "dmg-root/${{ env.APP_NAME }}.app"
+
+          DMG_PATH="${GITHUB_WORKSPACE}/${{ env.APP_NAME }}.dmg"
+
+          hdiutil create \
+            -volname "${{ env.APP_NAME }}" \
+            -srcfolder "dmg-root" \
+            -ov \
+            -format UDZO \
+            "${DMG_PATH}"
+
+          codesign --force --sign "${{ env.CODESIGN_IDENTITY }}" --timestamp "${DMG_PATH}"
+
+          echo "DMG_PATH=${DMG_PATH}" >> "$GITHUB_ENV"
+          echo "Created DMG: ${DMG_PATH}"
+
+      - name: Notarize DMG
+        run: |
+          set -euo pipefail
+
+          xattr -rc "${{ env.DMG_PATH }}"
+
+          SUBMISSION_OUTPUT=$(
+            "${{ env.XCODE_PATH }}/Contents/Developer/usr/bin/notarytool" submit \
+              "${{ env.DMG_PATH }}" \
+              --keychain-profile "default" \
+              --wait
+          )
+
+          echo "${SUBMISSION_OUTPUT}"
+
+          SUBMISSION_ID="$(echo "${SUBMISSION_OUTPUT}" | sed -n 's/^  id: //p' | head -n 1)"
+          STATUS="$(echo "${SUBMISSION_OUTPUT}" | sed -n 's/^  status: //p' | tail -n 1)"
+
+          echo "SUBMISSION_ID=${SUBMISSION_ID}" >> "$GITHUB_ENV"
+          echo "STATUS=${STATUS}" >> "$GITHUB_ENV"
+
+          if [ -z "${SUBMISSION_ID}" ]; then
+            echo "Could not determine notarization submission ID"
+            exit 1
+          fi
+
+          if [ "${STATUS}" != "Accepted" ]; then
+            echo "Notarization failed with status: ${STATUS}"
+            "${{ env.XCODE_PATH }}/Contents/Developer/usr/bin/notarytool" log \
+              "${SUBMISSION_ID}" \
+              --keychain-profile "default"
+            exit 1
+          fi
+
+          "${{ env.XCODE_PATH }}/Contents/Developer/usr/bin/stapler" staple \
+            "${{ env.DMG_PATH }}"
+
+      - name: Validate DMG
+        run: |
+          set -euo pipefail
+
+          "${{ env.XCODE_PATH }}/Contents/Developer/usr/bin/stapler" validate "${{ env.DMG_PATH }}"
+          spctl -a -vv -t open "${{ env.DMG_PATH }}" || true
+
+      - name: Set artifact name
+        run: |
+          set -euo pipefail
+
+          APP_INFO="${{ env.APP_PATH }}/Contents/Info.plist"
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print:CFBundleShortVersionString" "${APP_INFO}")
+
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=${{ env.PROJECT_NAME }}-${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Prepare artifact
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts
+          cp "${{ env.DMG_PATH }}" "artifacts/${{ env.ARTIFACT_NAME }}.dmg"
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: artifacts/
+          retention-days: 14

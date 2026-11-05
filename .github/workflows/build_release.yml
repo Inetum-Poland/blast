@@ -1,0 +1,225 @@
+name: "Build release DMG"
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: "Release tag (semver, e.g. v1.0.0). Used for artifact names and GitHub release."
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: "Build release artifact"
+    runs-on: macos-26
+
+    permissions:
+      contents: write
+
+    env:
+      XCODE_PATH: "/Applications/Xcode_26.5.app"
+      PROJECT_NAME: "BLAST"
+      SCHEME: "BLAST"
+      APP_NAME: "BLAST"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode
+        run: sudo xcode-select -s "${{ env.XCODE_PATH }}/Contents/Developer"
+
+      - name: Install app signing certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          keychain-password: ${{ github.run_id }}
+          p12-file-base64: ${{ secrets.APP_CERTIFICATE_P12 }}
+          p12-password: ${{ secrets.APP_CERTIFICATE_P12_PASSWORD }}
+
+      - name: Determine release version
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            REF_NAME="${{ github.event.inputs.version_tag }}"
+          else
+            REF_NAME="${GITHUB_REF_NAME}"
+          fi
+
+          VERSION="${REF_NAME#v}"
+          TAG="${REF_NAME}"
+
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=${{ env.PROJECT_NAME }}-${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Build app
+        run: |
+          set -euo pipefail
+
+          xcodebuild \
+            -project "BLAST.xcodeproj" \
+            -scheme "BLAST" \
+            clean build analyze \
+            -configuration Release \
+            -derivedDataPath DerivedData \
+            OTHER_CODE_SIGN_FLAGS="--timestamp"
+
+      - name: Locate app
+        run: |
+          set -euo pipefail
+
+          APP_PATH="$(find "${GITHUB_WORKSPACE}/DerivedData/Build/Products/Release" -maxdepth 1 -name "*.app" | head -n 1)"
+
+          if [ -z "${APP_PATH}" ]; then
+            echo "No .app found in Release output"
+            exit 1
+          fi
+
+          echo "APP_PATH=${APP_PATH}" >> "$GITHUB_ENV"
+          echo "Found app: ${APP_PATH}"
+
+      - name: Verify app signature
+        run: |
+          set -euo pipefail
+
+          codesign --verify --deep --strict --verbose=2 "${{ env.APP_PATH }}"
+          codesign -dv --verbose=4 "${{ env.APP_PATH }}" || true
+
+      - name: Setup notarization
+        run: |
+          "${{ env.XCODE_PATH }}/Contents/Developer/usr/bin/notarytool" store-credentials \
+            --key /dev/stdin \
+            --key-id "${{ secrets.NOTARY_AUTH_KEY_ID }}" \
+            --issuer "${{ secrets.NOTARY_ISSUER_UUID }}" \
+            default <<< "${{ secrets.NOTARY_AUTH_KEY }}"
+
+      - name: Resolve Developer ID identity for DMG signing
+        env:
+          DEV_APPLICATION_CERT_CN: ${{ secrets.DEV_APPLICATION_CERT_CN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DEV_APPLICATION_CERT_CN}" ]; then
+            echo "Using repository secret DEV_APPLICATION_CERT_CN."
+            echo "CODESIGN_IDENTITY=${DEV_APPLICATION_CERT_CN}" >> "$GITHUB_ENV"
+          else
+            IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/ {print $2; exit}')"
+            if [ -z "${IDENTITY}" ]; then
+              echo "No Developer ID Application identity found. Set secret DEV_APPLICATION_CERT_CN or import a valid P12."
+              security find-identity -v -p codesigning || true
+              exit 1
+            fi
+            echo "Resolved identity from keychain: ${IDENTITY}"
+            echo "CODESIGN_IDENTITY=${IDENTITY}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Create DMG
+        run: |
+          set -euo pipefail
+
+          mkdir -p dmg-root
+          cp -R "${{ env.APP_PATH }}" "dmg-root/${{ env.APP_NAME }}.app"
+
+          DMG_PATH="${GITHUB_WORKSPACE}/${{ env.ARTIFACT_NAME }}.dmg"
+
+          hdiutil create \
+            -volname "${{ env.APP_NAME }}" \
+            -srcfolder "dmg-root" \
+            -ov \
+            -format UDZO \
+            "${DMG_PATH}"
+
+          codesign --force --sign "${{ env.CODESIGN_IDENTITY }}" --timestamp "${DMG_PATH}"
+
+          echo "DMG_PATH=${DMG_PATH}" >> "$GITHUB_ENV"
+          echo "Created DMG: ${DMG_PATH}"
+
+      - name: Notarize DMG
+        run: |
+          set -euo pipefail
+
+          xattr -rc "${{ env.DMG_PATH }}"
+
+          SUBMISSION_OUTPUT=$(
+            "${{ env.XCODE_PATH }}/Contents/Developer/usr/bin/notarytool" submit \
+              "${{ env.DMG_PATH }}" \
+              --keychain-profile "default" \
+              --wait
+          )
+
+          echo "${SUBMISSION_OUTPUT}"
+
+          SUBMISSION_ID="$(echo "${SUBMISSION_OUTPUT}" | sed -n 's/^  id: //p' | head -n 1)"
+          STATUS="$(echo "${SUBMISSION_OUTPUT}" | sed -n 's/^  status: //p' | tail -n 1)"
+
+          echo "SUBMISSION_ID=${SUBMISSION_ID}" >> "$GITHUB_ENV"
+          echo "STATUS=${STATUS}" >> "$GITHUB_ENV"
+
+          if [ -z "${SUBMISSION_ID}" ]; then
+            echo "Could not determine notarization submission ID"
+            exit 1
+          fi
+
+          if [ "${STATUS}" != "Accepted" ]; then
+            echo "Notarization failed with status: ${STATUS}"
+            "${{ env.XCODE_PATH }}/Contents/Developer/usr/bin/notarytool" log \
+              "${SUBMISSION_ID}" \
+              --keychain-profile "default"
+            exit 1
+          fi
+
+          "${{ env.XCODE_PATH }}/Contents/Developer/usr/bin/stapler" staple "${{ env.DMG_PATH }}"
+
+      - name: Validate DMG
+        run: |
+          set -euo pipefail
+
+          # stapler validate is the reliable check after notarization. spctl on .dmg often returns
+          # "rejected (Insufficient Context)" on GitHub-hosted runners and must not gate CI.
+          "${{ env.XCODE_PATH }}/Contents/Developer/usr/bin/stapler" validate "${{ env.DMG_PATH }}"
+
+      - name: Generate checksum
+        run: |
+          set -euo pipefail
+
+          shasum -a 256 "${{ env.DMG_PATH }}" > "${{ env.DMG_PATH }}.sha256"
+
+      - name: Generate release notes
+        run: |
+          set -euo pipefail
+
+          PREVIOUS_TAG="$(git tag --sort=-version:refname | grep '^v' | grep -vx "${TAG}" | head -n 1 || true)"
+
+          {
+            echo "## Release ${TAG}"
+            echo
+            if [ -n "${PREVIOUS_TAG}" ]; then
+              echo "### Changes since ${PREVIOUS_TAG}"
+              echo
+              git log --pretty=format:'- %s (%h)' "${PREVIOUS_TAG}..HEAD"
+            else
+              echo "Initial release."
+            fi
+            echo
+            echo "### Artifacts"
+            echo
+            echo "- \`${{ env.ARTIFACT_NAME }}.dmg\`"
+            echo "- \`${{ env.ARTIFACT_NAME }}.dmg.sha256\`"
+          } > RELEASE_NOTES.md
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          gh release create "${TAG}" \
+            "${{ env.DMG_PATH }}" \
+            "${{ env.DMG_PATH }}.sha256" \
+            --title "${TAG}" \
+            --notes-file RELEASE_NOTES.md
